@@ -7,15 +7,23 @@ class LineaPedido(BaseModel):
     cantidad: float
     monto: float
 
-class PedidoOdoo(BaseModel):
+class PedidoVentaOdoo(BaseModel):
     id_odoo: int
     nombre: str
     fecha: datetime
     cliente: str
     total: float
-    lineas: Optional[
-        List[LineaPedido]
-    ] = None
+    lineas: Optional[List[LineaPedido]] = None
 
     class Config:
         from_attributes = True
+
+class ProductoPedido(BaseModel):
+    producto_id: int
+    cantidad: float
+    precio_unitario: float
+
+class PedidoVentaCreate(BaseModel):
+    cliente_id: int
+    fecha_pedido: str
+    productos: List[ProductoPedido]

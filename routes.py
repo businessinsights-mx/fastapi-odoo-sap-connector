@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from setting import Settings
 from utils.db import SessionLocal
 from utils.odoo_client import get_odoo_connection
 from models import PedidoOdoo
-from schemas import PedidoOdoo as PedidoOdooSchema
+from schemas import PedidoVentaOdoo, PedidoVentaCreate
 
 router = APIRouter()
 settings = Settings()
@@ -16,7 +16,7 @@ def get_db():
     finally:
         db.close()
 
-@router.get("/ultimo-pedido-venta", response_model=PedidoOdooSchema)
+@router.get("/ultimo-pedido-venta", response_model=PedidoVentaOdoo)
 def obtener_ultimo_pedido(db: Session = Depends(get_db)):
     uid, models = get_odoo_connection()
     pedidos = models.execute_kw(
@@ -80,11 +80,59 @@ def obtener_ultimo_pedido(db: Session = Depends(get_db)):
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-        pedido_schema = PedidoOdooSchema.from_orm(nuevo)
+        pedido_schema = PedidoVentaOdoo.from_orm(nuevo)
     else:
-        pedido_schema = PedidoOdooSchema.from_orm(existe)
+        pedido_schema = PedidoVentaOdoo.from_orm(existe)
 
     return {
         **pedido_schema.model_dump(),
         "lineas": detalle_lineas
+    }
+
+@router.post("/crear-pedido-venta")
+def crear_pedido_venta(
+    pedido: PedidoVentaCreate = Body(...),
+    db: Session = Depends(get_db)
+):
+    uid, models = get_odoo_connection()
+    
+    order_lines = [
+        (0, 0, {
+            'product_id': p.producto_id,
+            'product_uom_qty': p.cantidad,
+            'price_unit': p.precio_unitario
+        }) for p in pedido.productos
+    ]
+    
+    order_id = models.execute_kw(
+        settings.ODOO_DB, uid, settings.ODOO_PASSWORD,
+        'sale.order', 'create', [{
+            'partner_id': pedido.cliente_id,
+            'date_order': pedido.fecha_pedido,
+            'order_line': order_lines
+        }]
+    )
+
+    pedido_odoo = models.execute_kw(
+        settings.ODOO_DB, uid, settings.ODOO_PASSWORD,
+        'sale.order', 'read', [[order_id]],
+        {'fields': ['id', 'name', 'date_order', 'partner_id', 'amount_total']}
+    )[0]
+
+    nuevo = PedidoOdoo(
+        id_odoo=pedido_odoo['id'],
+        nombre=pedido_odoo['name'],
+        fecha=pedido_odoo['date_order'],
+        cliente=pedido_odoo['partner_id'][1] if pedido_odoo['partner_id'] else "",
+        total=pedido_odoo['amount_total']
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    return {
+        "order_id": order_id,
+        "nombre": pedido_odoo['name'],
+        "total": pedido_odoo['amount_total'],
+        "message": "Pedido creado en Odoo y guardado localmente"
     }
