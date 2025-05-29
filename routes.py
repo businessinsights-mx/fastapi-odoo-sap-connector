@@ -87,14 +87,44 @@ def obtener_ultimo_pedido(db: Session = Depends(get_db)):
         db.add(nuevo)
         db.commit()
         db.refresh(nuevo)
-        pedido_schema = PedidoVentaOdoo.from_orm(nuevo)
-    else:
-        pedido_schema = PedidoVentaOdoo.from_orm(existe)
 
-    return {
-        **pedido_schema.model_dump(),
-        "lineas": detalle_lineas
-    }
+
+        for linea in detalle_lineas:
+            nueva_linea = LineaPedidoOdoo(
+                pedido_id=nuevo.id,
+                producto_id=linea["producto_id"],
+                producto=linea["producto"],
+                cantidad=linea["cantidad"],
+                monto=linea["monto"]
+            )
+            db.add(nueva_linea)
+        db.commit()
+
+        return {
+            "id_odoo": nuevo.id_odoo,
+            "nombre": nuevo.nombre,
+            "fecha": nuevo.fecha,
+            "cliente": nuevo.cliente,
+            "total": nuevo.total,
+            "lineas": detalle_lineas
+        }
+    else:
+        return {
+            "id_odoo": existe.id_odoo,
+            "nombre": existe.nombre,
+            "fecha": existe.fecha,
+            "cliente": existe.cliente,
+            "total": existe.total,
+            "lineas": [
+                {
+                    "producto_id": l.producto_id,
+                    "producto": l.producto,
+                    "cantidad": l.cantidad,
+                    "monto": l.monto
+                }
+                for l in existe.lineas
+            ]
+        }
 
 @router.post("/crear-pedido-venta")
 def crear_pedido_venta(
