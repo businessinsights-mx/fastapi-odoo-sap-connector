@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from setting import Settings
 from utils.db import SessionLocal
 from utils.odoo_client import get_odoo_connection
-from models import PedidoOdoo
+from models import PedidoOdoo, LineaPedidoOdoo
 from schemas import PedidoVentaOdoo, PedidoVentaCreate
 
 router = APIRouter()
@@ -20,8 +20,11 @@ def get_db():
 def obtener_ultimo_pedido(db: Session = Depends(get_db)):
     uid, models = get_odoo_connection()
     pedidos = models.execute_kw(
-        settings.ODOO_DB, uid, settings.ODOO_PASSWORD,
-        'sale.order', 'search_read',
+        settings.ODOO_DB, 
+        uid, 
+        settings.ODOO_PASSWORD,
+        'sale.order', 
+        'search_read',
         [[['state', '!=', 'cancel']]],
         {'fields': [
             'id',
@@ -44,8 +47,11 @@ def obtener_ultimo_pedido(db: Session = Depends(get_db)):
     pedido = pedidos[0]
 
     lineas = models.execute_kw(
-        settings.ODOO_DB, uid, settings.ODOO_PASSWORD,
-        'sale.order.line', 'read',
+        settings.ODOO_DB, 
+        uid, 
+        settings.ODOO_PASSWORD,
+        'sale.order.line', 
+        'read',
         [pedido['order_line']],
         {'fields':
             [
@@ -58,6 +64,7 @@ def obtener_ultimo_pedido(db: Session = Depends(get_db)):
 
     detalle_lineas = [
         {
+            "producto_id": l['product_id'][0] if l.get('product_id') and isinstance(l['product_id'], list) and len(l['product_id']) > 0 else None,
             "producto": l['product_id'][1] if l.get('product_id') and isinstance(l['product_id'], list) and len(l['product_id']) > 1 else "",
             "cantidad": l.get('product_uom_qty', 0),
             "monto": l.get('price_total', 0)
@@ -114,9 +121,20 @@ def crear_pedido_venta(
     )
 
     pedido_odoo = models.execute_kw(
-        settings.ODOO_DB, uid, settings.ODOO_PASSWORD,
-        'sale.order', 'read', [[order_id]],
-        {'fields': ['id', 'name', 'date_order', 'partner_id', 'amount_total']}
+        settings.ODOO_DB, 
+        uid, 
+        settings.ODOO_PASSWORD,
+        'sale.order', 
+        'read', 
+        [[order_id]],
+        {'fields': [
+            'id', 
+            'name', 
+            'date_order', 
+            'partner_id', 
+            'amount_total'
+            ]
+        }
     )[0]
 
     nuevo = PedidoOdoo(
@@ -129,6 +147,31 @@ def crear_pedido_venta(
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+
+    for producto in pedido.productos:
+        producto_odoo = models.execute_kw(
+            settings.ODOO_DB, 
+            uid, 
+            settings.ODOO_PASSWORD,
+            'product.product', 
+            'read', 
+            [[producto.producto_id]],
+            {'fields': [
+                'name'
+                ]
+            }
+        )
+        nombre_producto = producto_odoo[0]['name'] if producto_odoo else str(producto.producto_id)
+
+        nueva_linea = LineaPedidoOdoo(
+            pedido_id=nuevo.id,
+            producto_id=producto.producto_id, 
+            producto=nombre_producto,
+            cantidad=producto.cantidad,
+            monto=producto.precio_unitario * producto.cantidad
+        )
+        db.add(nueva_linea)
+    db.commit()
 
     return {
         "order_id": order_id,

@@ -20,6 +20,7 @@ class LineaPedidoOdoo(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     pedido_id = Column(Integer, ForeignKey("pedidos_odoo.id"), nullable=False)
+    producto_id = Column(Integer, nullable=False)  
     producto = Column(String, nullable=False)
     cantidad = Column(Float, nullable=False)
     monto = Column(Float, nullable=False)

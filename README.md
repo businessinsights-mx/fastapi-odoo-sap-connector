@@ -45,7 +45,9 @@ API en FastAPI para conectar Odoo SaaS y almacenar pedidos de venta en una base 
 5. **Crea la base de datos en PostgreSQL si no existe:**
 
    ```sh
-   createdb tu_db
+   psql -U tu_usuario
+   CREATE DATABASE tu_db;
+   \q
    ```
 
 ## Uso
@@ -60,9 +62,29 @@ API en FastAPI para conectar Odoo SaaS y almacenar pedidos de venta en una base 
 
    - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-3. **Endpoint principal:**
+3. **Endpoints principales:**
 
    - `GET /ultimo-pedido-venta`: Obtiene el último pedido de venta de Odoo y lo guarda en la base de datos local.
+   - `POST /crear-pedido-venta`: Crea un pedido de venta en Odoo (y lo guarda en la base de datos local) enviando un JSON con el cliente, fecha y productos. Ejemplo de payload:
+
+     ```json
+     {
+       "cliente_id": 1387,
+       "fecha_pedido": "2025-05-28",
+       "productos": [
+         {
+           "producto_id": 877,
+           "cantidad": 1,
+           "precio_unitario": 9600
+         },
+         {
+           "producto_id": 565,
+           "cantidad": 25,
+           "precio_unitario": 1200
+         }
+       ]
+     }
+     ```
 
 ## Estructura del proyecto
 

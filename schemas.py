@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 
 class LineaPedido(BaseModel):
+    producto_id: int
     producto: str
     cantidad: float
     monto: float
